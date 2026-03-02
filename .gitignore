@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# JS / frontend heavy projects
+node_modules/
+dist/
+build/
+coverage/
+*.log
+
+# General junk
+.DS_Store
+Thumbs.db
+*.swp
+*.bak
+*.tmp
+*.temp
+
+# Secrets / keys
+.env
+*.env.*
+credentials.json
+service-account.json
+*.key
+*.pem
+
+# IDEs
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace

@@ -1,0 +1,78 @@
+:root {
+  --color-void: #050505;
+  --color-obsidian: #121212;
+  --color-tetryon-neon: #00ffcc;
+  --color-flux-blue: #0077ff;
+  --color-alert-red: #ff3333;
+  --color-text-primary: #e0e0e0;
+  --color-text-secondary: #a0a0a0;
+  
+  --glass-panel: rgba(18, 18, 18, 0.85);
+  --glass-border: 1px solid rgba(255, 255, 255, 0.1);
+  --font-mono: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+}
+
+body {
+  margin: 0;
+  background-color: var(--color-void);
+  color: var(--color-text-primary);
+  font-family: var(--font-mono);
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+#root {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+}
+
+.tetryon-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1000;
+}
+
+.tetryon-panel {
+  pointer-events: auto;
+  background: var(--glass-panel);
+  border: var(--glass-border);
+  backdrop-filter: blur(12px);
+  padding: 1rem;
+  border-radius: 4px;
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
+}
+
+.leaflet-container {
+  width: 100%;
+  height: 100%;
+  background: #000; /* Force black pending loading */
+  z-index: 1;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-void);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-obsidian); 
+  border: 1px solid var(--color-text-secondary);
+}
+
+/* Animations */
+@keyframes pulse-glow {
+  0% { box-shadow: 0 0 5px var(--color-tetryon-neon); }
+  50% { box-shadow: 0 0 15px var(--color-tetryon-neon), 0 0 5px var(--color-flux-blue); }
+  100% { box-shadow: 0 0 5px var(--color-tetryon-neon); }
+}
+
+.glow-active {
+  animation: pulse-glow 2s infinite;
+}

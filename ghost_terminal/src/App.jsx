@@ -1,102 +1,131 @@
-import React, { useState } from 'react';
-import { Activity, Globe, Zap, Radio } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import { Activity, Globe, Radio, Zap } from 'lucide-react';
 import TetryonMap from './components/TetryonMap';
 import './index.css';
 
+const LAYER_DEFINITIONS = [
+  {
+    key: 'forces',
+    label: 'Prime Force Field',
+    description: 'Visualizes vector interactions between nearby tetryon nodes.',
+    icon: Zap,
+  },
+  {
+    key: 'resonance',
+    label: 'Resonance Topography',
+    description: 'Highlights node resonance intensity across the local mesh.',
+    icon: Activity,
+  },
+  {
+    key: 'celestial',
+    label: 'Celestial Overlay',
+    description: 'Projects a harmonic hex-grid aligned to the current viewport.',
+    icon: Radio,
+  },
+];
+
 function App() {
-    const [activeLayers, setActiveLayers] = useState({
-        resonance: false,
-        forces: false,
-        celestial: false
-    });
+  const [activeLayers, setActiveLayers] = useState({
+    resonance: true,
+    forces: true,
+    celestial: false,
+  });
+  const [mode, setMode] = useState('observer');
+  const [meshStats, setMeshStats] = useState({ nodeCount: 0, connectionCount: 0, orbitCount: 0 });
 
-    const [mode, setMode] = useState('observer'); // 'observer' | 'navigator'
+  const statusText = useMemo(() => {
+    if (mode === 'navigator') {
+      return 'Navigator mode is active. Drop three pins on the map to calculate orbit paths.';
+    }
 
-    const toggleLayer = (key) => {
-        setActiveLayers(prev => ({ ...prev, [key]: !prev[key] }));
-    };
+    return 'Observer mode is active. Pan the map to regenerate the tetryon mesh around the viewport.';
+  }, [mode]);
 
-    return (
-        <div className="relative w-full h-full bg-black overflow-hidden flex">
-            {/* Map Layer */}
-            <div className="absolute inset-0 z-0">
-                <TetryonMap activeLayers={activeLayers} mode={mode} />
-            </div>
+  const toggleLayer = (key) => {
+    setActiveLayers((previous) => ({
+      ...previous,
+      [key]: !previous[key],
+    }));
+  };
 
-            {/* Sovereign's Lens Panel */}
-            <div className="absolute top-4 right-4 tetryon-panel w-80 z-[1000]">
-                <div className="flex items-center gap-2 mb-4 border-b border-white/10 pb-2">
-                    <Globe className="text-cyan-400 w-5 h-5 animate-pulse" />
-                    <h1 className="text-lg font-bold text-cyan-400 tracking-wider">SOVEREIGN LENS</h1>
-                </div>
+  return (
+    <div className="app-shell">
+      <div className="map-region" aria-label="Tetryon map region">
+        <TetryonMap activeLayers={activeLayers} mode={mode} onStatsChange={setMeshStats} />
+      </div>
 
-                <div className="space-y-3">
-                    <LayerToggle
-                        icon={<Zap size={18} />}
-                        label="Prime Force Field"
-                        active={activeLayers.forces}
-                        onClick={() => toggleLayer('forces')}
-                        desc="Visualizes vector interactions."
-                    />
-                    <LayerToggle
-                        icon={<Activity size={18} />}
-                        label="Resonance Topography"
-                        active={activeLayers.resonance}
-                        onClick={() => toggleLayer('resonance')}
-                        desc="Heats maps stability."
-                    />
-                    <LayerToggle
-                        icon={<Radio size={18} />}
-                        label="Celestial Overlay"
-                        active={activeLayers.celestial}
-                        onClick={() => toggleLayer('celestial')}
-                        desc="Reconstructs sky resonance."
-                    />
-
-                    <div className="h-px bg-white/10 my-3"></div>
-
-                    <div
-                        onClick={() => setMode(mode === 'observer' ? 'navigator' : 'observer')}
-                        className={`p-3 rounded cursor-pointer transition-all duration-300 border ${mode === 'navigator'
-                                ? 'bg-yellow-900/30 border-yellow-400/50 shadow-[0_0_10px_rgba(255,204,0,0.2)]'
-                                : 'bg-white/5 border-transparent hover:bg-white/10'
-                            }`}
-                    >
-                        <div className="flex items-center gap-3 mb-1">
-                            <div className={`${mode === 'navigator' ? 'text-yellow-400' : 'text-gray-400'}`}><Globe size={18} /></div>
-                            <div className={`font-medium ${mode === 'navigator' ? 'text-yellow-100' : 'text-gray-300'}`}>Three-Body Navigator</div>
-                        </div>
-                        <div className="text-[10px] text-gray-500 pl-8">
-                            {mode === 'navigator' ? 'ACTIVE: Drop 3 pins to solve.' : 'OFFLINE'}
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div className="mt-6 pt-4 border-t border-white/10 text-xs text-gray-500 font-mono">
-                STATUS: GHOST_PROTOCOL_ACTIVE<br />
-                NODE: 127.0.0.1 (SIMULATION)<br />
-                VERSION: 0.ψ
-            </div>
+      <aside className="control-panel" aria-label="Tetryon controls">
+        <div className="panel-header">
+          <div className="panel-header__icon">
+            <Globe size={18} />
+          </div>
+          <div>
+            <p className="eyebrow">Tetryon Mesh Console</p>
+            <h1>Tetryon Map Visualizer</h1>
+          </div>
         </div>
-        </div >
-    );
-}
 
-const LayerToggle = ({ icon, label, active, onClick, desc }) => (
-    <div
-        onClick={onClick}
-        className={`p-3 rounded cursor-pointer transition-all duration-300 border ${active
-            ? 'bg-cyan-900/30 border-cyan-400/50 shadow-[0_0_10px_rgba(0,255,204,0.2)]'
-            : 'bg-white/5 border-transparent hover:bg-white/10'
-            }`}
-    >
-        <div className="flex items-center gap-3 mb-1">
-            <div className={`${active ? 'text-cyan-400' : 'text-gray-400'}`}>{icon}</div>
-            <div className={`font-medium ${active ? 'text-cyan-100' : 'text-gray-300'}`}>{label}</div>
-        </div>
-        <div className="text-[10px] text-gray-500 pl-8">{desc}</div>
+        <section className="panel-section">
+          <h2>Display Layers</h2>
+          <div className="layer-list">
+            {LAYER_DEFINITIONS.map(({ key, label, description, icon: Icon }) => (
+              <button
+                key={key}
+                type="button"
+                className={`layer-toggle ${activeLayers[key] ? 'is-active' : ''}`}
+                onClick={() => toggleLayer(key)}
+                aria-pressed={activeLayers[key]}
+              >
+                <span className="layer-toggle__icon" aria-hidden="true">
+                  <Icon size={18} />
+                </span>
+                <span className="layer-toggle__body">
+                  <span className="layer-toggle__label">{label}</span>
+                  <span className="layer-toggle__description">{description}</span>
+                </span>
+              </button>
+            ))}
+          </div>
+        </section>
+
+        <section className="panel-section">
+          <h2>Navigation Mode</h2>
+          <button
+            type="button"
+            className={`mode-toggle ${mode === 'navigator' ? 'is-active' : ''}`}
+            onClick={() => setMode((current) => (current === 'observer' ? 'navigator' : 'observer'))}
+          >
+            <span className="mode-toggle__title">
+              {mode === 'navigator' ? 'Three-Body Navigator Enabled' : 'Observer Mode Enabled'}
+            </span>
+            <span className="mode-toggle__description">{statusText}</span>
+          </button>
+        </section>
+
+        <section className="panel-section">
+          <h2>System Status</h2>
+          <dl className="status-grid">
+            <div>
+              <dt>Nodes</dt>
+              <dd>{meshStats.nodeCount}</dd>
+            </div>
+            <div>
+              <dt>Connections</dt>
+              <dd>{meshStats.connectionCount}</dd>
+            </div>
+            <div>
+              <dt>Orbits</dt>
+              <dd>{meshStats.orbitCount}</dd>
+            </div>
+            <div>
+              <dt>Build</dt>
+              <dd>v1.0.0</dd>
+            </div>
+          </dl>
+        </section>
+      </aside>
     </div>
-);
+  );
+}
 
 export default App;

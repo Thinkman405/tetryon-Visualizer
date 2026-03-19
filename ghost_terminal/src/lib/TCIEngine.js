@@ -1,114 +1,106 @@
 import { TetryonNode, TetryonGeometry } from './TetryonGeometry.js';
 
-/**
- * Tetryon Cartographic Interface (TCI) Engine.
- * Manages the "Resonance Mesh" - the hidden layer of reality.
- */
 export class TCIEngine {
-    constructor() {
-        this.nodes = new Map(); // Map<string, TetryonNode>
-        this.meshConnections = []; // Array<{source, target, force, resonance}>
-        this.orbitPaths = []; // Array<Array<[lat, lng]>>
-        this.maxNodes = 100;
-    }
+  constructor() {
+    this.nodes = new Map();
+    this.meshConnections = [];
+    this.orbitPaths = [];
+    this.maxNodes = 100;
+  }
 
-    /**
-     * Ingests a new stream of coordinates.
-     */
-    ingest(coordinateStream) {
-        this.nodes.clear();
-        coordinateStream.forEach(coord => {
-            const seed = Math.abs(coord.lat * coord.lng * 1000) + 1;
-            const node = new TetryonNode(seed);
-            node.displayCoords = { lat: coord.lat, lng: coord.lng };
-            node.id = coord.id;
-            this.nodes.set(coord.id, node);
-        });
-        this.updateMesh();
-    }
+  ingest(coordinateStream) {
+    this.nodes.clear();
 
-    /**
-     * Recalculates forces and connections between nodes.
-     */
-    updateMesh() {
-        this.meshConnections = [];
-        const nodeList = Array.from(this.nodes.values());
+    coordinateStream.slice(0, this.maxNodes).forEach((coordinate, index) => {
+      const seed = Math.abs(coordinate.lat * coordinate.lng * 1000) + index + 1;
+      const node = new TetryonNode(seed);
+      node.displayCoords = { lat: coordinate.lat, lng: coordinate.lng };
+      node.id = coordinate.id;
+      this.nodes.set(coordinate.id, node);
+    });
 
-        for (let i = 0; i < nodeList.length; i++) {
-            for (let j = i + 1; j < nodeList.length; j++) {
-                const n1 = nodeList[i];
-                const n2 = nodeList[j];
+    this.updateMesh();
+  }
 
-                const force = TetryonGeometry.tetryonForce(n1, n2);
-                const distance = TetryonGeometry.geometricDistance(n1, n2);
+  updateMesh() {
+    this.meshConnections = [];
+    const nodeList = Array.from(this.nodes.values());
 
-                if (force > 0.001) {
-                    this.meshConnections.push({
-                        source: n1,
-                        target: n2,
-                        force: force,
-                        distance: distance,
-                        isStressed: force > 0.1
-                    });
-                }
-            }
+    for (let sourceIndex = 0; sourceIndex < nodeList.length; sourceIndex += 1) {
+      for (let targetIndex = sourceIndex + 1; targetIndex < nodeList.length; targetIndex += 1) {
+        const source = nodeList[sourceIndex];
+        const target = nodeList[targetIndex];
+        const force = TetryonGeometry.tetryonForce(source, target);
+        const distance = TetryonGeometry.geometricDistance(source, target);
+
+        if (force > 0.001) {
+          this.meshConnections.push({
+            id: `${source.id}-${target.id}`,
+            source,
+            target,
+            force,
+            distance,
+            isStressed: force > 0.1,
+          });
         }
+      }
+    }
+  }
+
+  solveThreeBody(points) {
+    if (points.length !== 3) {
+      return [];
     }
 
-    /**
-     * Solves the Three-Body Problem for 3 geographic points.
-     * Returns stable orbital paths (mocked as Lissajous figures for visualization).
-     * @param {Array<{lat, lng}>} points 
-     */
-    solveThreeBody(points) {
-        if (points.length !== 3) return [];
+    this.orbitPaths = [];
+    const centroid = {
+      lat: (points[0].lat + points[1].lat + points[2].lat) / 3,
+      lng: (points[0].lng + points[1].lng + points[2].lng) / 3,
+    };
 
-        this.orbitPaths = [];
+    for (let orbitIndex = 0; orbitIndex < 3; orbitIndex += 1) {
+      const phaseOffset = ((Math.PI * 2) / 3) * orbitIndex;
+      const radius = 1.2;
+      const path = [];
 
-        // Calculate centroid
-        const centroid = {
-            lat: (points[0].lat + points[1].lat + points[2].lat) / 3,
-            lng: (points[0].lng + points[1].lng + points[2].lng) / 3
-        };
+      for (let time = 0; time <= Math.PI * 2; time += 0.1) {
+        path.push([
+          centroid.lat + radius * Math.sin(time * 2 + phaseOffset) * 0.6,
+          centroid.lng + radius * Math.cos(time * 3) * 0.8,
+        ]);
+      }
 
-        // Generate 3 distinct resonant orbits around the centroid/points
-        // We use parametric equations to simulate Tetryon Harmonics
-        for (let i = 0; i < 3; i++) {
-            const path = [];
-            const phaseOffset = (Math.PI * 2 / 3) * i;
-            const radius = 0.015; // Approx scale
-
-            for (let t = 0; t <= Math.PI * 2; t += 0.1) {
-                // A figure-8 or trefoil knot projection
-                const lat = centroid.lat + radius * Math.sin(t * 2 + phaseOffset) * 0.6; // Flatten latitude slightly
-                const lng = centroid.lng + radius * Math.cos(t * 3);
-                path.push([lat, lng]);
-            }
-            // Close the loop
-            path.push(path[0]);
-            this.orbitPaths.push(path);
-        }
-
-        return this.orbitPaths;
+      path.push(path[0]);
+      this.orbitPaths.push(path);
     }
 
-    getMeshState() {
-        return {
-            nodes: Array.from(this.nodes.values()),
-            connections: this.meshConnections,
-            orbitPaths: this.orbitPaths
-        };
-    }
+    return this.orbitPaths;
+  }
 
-    generateMockNodes(centerLat, centerLng, count = 10) {
-        const mocks = [];
-        for (let i = 0; i < count; i++) {
-            mocks.push({
-                id: `phantom-${i}`,
-                lat: centerLat + (Math.random() - 0.5) * 0.05,
-                lng: centerLng + (Math.random() - 0.5) * 0.05
-            });
-        }
-        this.ingest(mocks);
-    }
+  clearOrbitPaths() {
+    this.orbitPaths = [];
+  }
+
+  getMeshState() {
+    return {
+      nodes: Array.from(this.nodes.values()),
+      connections: this.meshConnections,
+      orbitPaths: this.orbitPaths,
+    };
+  }
+
+  generateMockNodes(centerLat, centerLng, count = 10) {
+    const nodes = Array.from({ length: count }, (_, index) => {
+      const angle = ((Math.PI * 2) / count) * index;
+      const radius = 0.65 + (index % 4) * 0.18;
+
+      return {
+        id: `phantom-${index}`,
+        lat: centerLat + Math.cos(angle) * radius,
+        lng: centerLng + Math.sin(angle) * radius,
+      };
+    });
+
+    this.ingest(nodes);
+  }
 }

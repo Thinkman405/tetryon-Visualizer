@@ -1,208 +1,238 @@
-import React, { useEffect, useState } from 'react';
-import { MapContainer, TileLayer, Popup, useMapEvents, CircleMarker, Polygon, Polyline } from 'react-leaflet';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  CircleMarker,
+  MapContainer,
+  Polygon,
+  Polyline,
+  Popup,
+  TileLayer,
+  Tooltip,
+  useMap,
+  useMapEvents,
+} from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import { TCIEngine } from '../lib/TCIEngine';
 
+const INITIAL_CENTER = [37.7749, -122.4194];
 const engine = new TCIEngine();
 
-// Component to handle map events and update engine
-const MapController = ({ onUpdate, mode, onPinDrop }) => {
-    const map = useMapEvents({
-        moveend: () => {
-            if (mode === 'navigator') return; // Don't regen mocks in navigator mode
-            const center = map.getCenter();
-            // Generate mock nodes around center for Phase 0
-            engine.generateMockNodes(center.lat, center.lng, 20);
-            onUpdate(engine.getMeshState());
-        },
-        click: (e) => {
-            if (mode === 'navigator') {
-                onPinDrop(e.latlng);
-            }
-        },
-        load: () => {
-            // Initial load
-            const center = map.getCenter();
-            engine.generateMockNodes(center.lat, center.lng, 20);
-            onUpdate(engine.getMeshState());
-        }
+const MapController = ({ mode, onMeshState, onPinDrop }) => {
+  const map = useMapEvents({
+    moveend: () => {
+      if (mode === 'navigator') {
+        return;
+      }
+
+      const center = map.getCenter();
+      engine.generateMockNodes(center.lat, center.lng, 18);
+      onMeshState(engine.getMeshState());
+    },
+    click: (event) => {
+      if (mode === 'navigator') {
+        onPinDrop(event.latlng);
+      }
+    },
+  });
+
+  useEffect(() => {
+    const center = map.getCenter();
+    engine.generateMockNodes(center.lat, center.lng, 18);
+    onMeshState(engine.getMeshState());
+  }, [map, onMeshState]);
+
+  return null;
+};
+
+const CenterTracker = ({ onCenterChange }) => {
+  const map = useMapEvents({
+    moveend: () => {
+      const center = map.getCenter();
+      onCenterChange([center.lat, center.lng]);
+    },
+  });
+
+  useEffect(() => {
+    const center = map.getCenter();
+    onCenterChange([center.lat, center.lng]);
+  }, [map, onCenterChange]);
+
+  return null;
+};
+
+const ResizeInvalidator = () => {
+  const map = useMap();
+
+  useEffect(() => {
+    const invalidate = () => map.invalidateSize();
+    invalidate();
+    window.addEventListener('resize', invalidate);
+    return () => window.removeEventListener('resize', invalidate);
+  }, [map]);
+
+  return null;
+};
+
+const TetryonMap = ({ activeLayers, mode, onStatsChange }) => {
+  const [meshState, setMeshState] = useState({ nodes: [], connections: [], orbitPaths: [] });
+  const [mapCenter, setMapCenter] = useState(INITIAL_CENTER);
+  const [pins, setPins] = useState([]);
+
+  useEffect(() => {
+    onStatsChange({
+      nodeCount: meshState.nodes.length,
+      connectionCount: meshState.connections.length,
+      orbitCount: meshState.orbitPaths.length,
     });
+  }, [meshState, onStatsChange]);
 
-    // Trigger initial update manually on mount
-    useEffect(() => {
-        const center = map.getCenter();
-        engine.generateMockNodes(center.lat, center.lng, 20);
-        onUpdate(engine.getMeshState());
-    }, [map, onUpdate]);
-
-    return null;
-};
-
-// Component to track map center
-// Note: We use a separate component to isolate the hook usage
-const CenterTracker = ({ onUpdate }) => {
-    const map = useMapEvents({
-        moveend: () => {
-            const center = map.getCenter();
-            onUpdate([center.lat, center.lng]);
-        },
-        load: () => {
-            const center = map.getCenter();
-            onUpdate([center.lat, center.lng]);
-        }
-    });
-
-    useEffect(() => {
-        if (map) {
-            const center = map.getCenter();
-            onUpdate([center.lat, center.lng]);
-        }
-    }, [map, onUpdate]);
-
-    return null;
-};
-
-const TetryonMap = ({ activeLayers, mode }) => {
-    const [meshState, setMeshState] = useState({ nodes: [], connections: [], orbitPaths: [] });
-    const [mapCenter, setMapCenter] = useState(null);
-    const [pins, setPins] = useState([]);
-
-    const handlePinDrop = (latlng) => {
-        if (pins.length >= 3) {
-            setPins([latlng]); // Reset if already 3
-            // Clear orbits
-            engine.orbitPaths = [];
-            setMeshState(engine.getMeshState());
-        } else {
-            const newPins = [...pins, latlng];
-            setPins(newPins);
-            if (newPins.length === 3) {
-                // Solve
-                engine.solveThreeBody(newPins);
-                setMeshState(engine.getMeshState());
-            }
-        }
-    };
-
-    return (
-        <MapContainer
-            center={[51.505, -0.09]}
-            zoom={13}
-            className="w-full h-full bg-black"
-            zoomControl={false}
-        >
-            <TileLayer
-                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-            />
-
-            <MapController
-                onUpdate={setMeshState}
-                mode={mode}
-                onPinDrop={handlePinDrop}
-            />
-            <CenterTracker onUpdate={setMapCenter} />
-
-            {/* Render Prime Force Lines */}
-            {activeLayers.forces && meshState.connections.map((conn, idx) => (
-                <ForceLine key={`line-${idx}`} connection={conn} />
-            ))}
-
-            {/* Celestial Overlay - Hexagon Pattern */}
-            {activeLayers.celestial && mapCenter && (
-                <CelestialOverlay center={mapCenter} />
-            )}
-
-            {/* Navigator Pins */}
-            {pins.map((pin, i) => (
-                <Marker position={pin} key={`pin-${i}`} />
-            ))}
-
-            {/* Three-Body Orbits */}
-            {meshState.orbitPaths && meshState.orbitPaths.map((path, i) => (
-                <Polyline
-                    key={`orbit-${i}`}
-                    positions={path}
-                    pathOptions={{ color: '#ffcc00', weight: 2, dashArray: '10, 5' }}
-                />
-            ))}
-
-            {/* Render Nodes */}
-            {meshState.nodes.map((node) => (
-                <CircleMarker
-                    key={node.id}
-                    center={[node.displayCoords.lat, node.displayCoords.lng]}
-                    radius={4}
-                    pathOptions={{
-                        color: activeLayers.resonance ? '#ff0055' : '#00ffcc',
-                        fillColor: activeLayers.resonance ? '#ff0055' : '#00ffcc',
-                        fillOpacity: 0.6,
-                        weight: 1
-                    }}
-                >
-                    <Popup className="tetryon-popup">
-                        <div className="text-xs font-mono">
-                            <div>ID: {node.id}</div>
-                            <div>SIG: {node.harmonicSignature}</div>
-                            <div>VAL: {node.originalValue}</div>
-                        </div>
-                    </Popup>
-                </CircleMarker>
-            ))}
-        </MapContainer>
-    );
-};
-
-/* Celestial Overlay Component */
-const CelestialOverlay = ({ center }) => {
-    if (!center) return null;
-    // Create a hexagon around the center (approx 0.02 deg radius)
-    const radius = 0.02;
-    const positions = [];
-    for (let i = 0; i < 6; i++) {
-        const angle_deg = 60 * i;
-        const angle_rad = Math.PI / 180 * angle_deg;
-        positions.push([
-            center[0] + radius * Math.cos(angle_rad),
-            center[1] + radius * Math.sin(angle_rad) * 1.5 // Adjust for aspect ratio roughly
-        ]);
+  useEffect(() => {
+    if (mode === 'observer' && pins.length > 0) {
+      setPins([]);
+      engine.clearOrbitPaths();
+      setMeshState(engine.getMeshState());
     }
+  }, [mode, pins.length]);
 
-    return (
-        <>
-            <Polygon
-                positions={positions}
-                pathOptions={{ color: '#a0a0ff', weight: 1, dashArray: '4, 8', fillOpacity: 0.05, interactive: false }}
-            />
-            {/* Inner Triangle */}
-            <Polygon
-                positions={[positions[0], positions[2], positions[4]]}
-                pathOptions={{ color: '#a0a0ff', weight: 0.5, fill: false, interactive: false }}
-            />
-            {/* Inverse Triangle */}
-            <Polygon
-                positions={[positions[1], positions[3], positions[5]]}
-                pathOptions={{ color: '#a0a0ff', weight: 0.5, fill: false, interactive: false }}
-            />
-        </>
-    );
+  const handleMeshState = useCallback((nextState) => {
+    setMeshState(nextState);
+  }, []);
+
+  const handlePinDrop = useCallback(
+    (latlng) => {
+      setPins((currentPins) => {
+        const nextPins = currentPins.length >= 3 ? [latlng] : [...currentPins, latlng];
+
+        if (nextPins.length === 3) {
+          engine.solveThreeBody(nextPins);
+        } else {
+          engine.clearOrbitPaths();
+        }
+
+        setMeshState(engine.getMeshState());
+        return nextPins;
+      });
+    },
+    [setMeshState],
+  );
+
+  const tileUrl = useMemo(
+    () =>
+      'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+    [],
+  );
+
+  return (
+    <MapContainer center={INITIAL_CENTER} zoom={5} className="map-canvas" zoomControl>
+      <TileLayer
+        attribution='&copy; OpenStreetMap contributors &copy; CARTO'
+        url={tileUrl}
+      />
+
+      <ResizeInvalidator />
+      <MapController mode={mode} onMeshState={handleMeshState} onPinDrop={handlePinDrop} />
+      <CenterTracker onCenterChange={setMapCenter} />
+
+      {activeLayers.forces &&
+        meshState.connections.map((connection) => (
+          <ForceLine
+            key={connection.id}
+            connection={connection}
+          />
+        ))}
+
+      {activeLayers.celestial && mapCenter && <CelestialOverlay center={mapCenter} />}
+
+      {pins.map((pin, index) => (
+        <CircleMarker
+          key={`pin-${pin.lat}-${pin.lng}-${index}`}
+          center={[pin.lat, pin.lng]}
+          radius={6}
+          pathOptions={{ color: '#ffd54f', fillColor: '#ffd54f', fillOpacity: 0.85, weight: 2 }}
+        >
+          <Tooltip direction="top" offset={[0, -6]} opacity={1}>
+            Navigator Pin {index + 1}
+          </Tooltip>
+        </CircleMarker>
+      ))}
+
+      {meshState.orbitPaths.map((path, index) => (
+        <Polyline
+          key={`orbit-${index}`}
+          positions={path}
+          pathOptions={{ color: '#ffd54f', weight: 2, dashArray: '10 8' }}
+        />
+      ))}
+
+      {meshState.nodes.map((node) => (
+        <CircleMarker
+          key={node.id}
+          center={[node.displayCoords.lat, node.displayCoords.lng]}
+          radius={5}
+          pathOptions={{
+            color: activeLayers.resonance ? '#ff5c8a' : '#4ef4d2',
+            fillColor: activeLayers.resonance ? '#ff5c8a' : '#4ef4d2',
+            fillOpacity: activeLayers.resonance ? 0.8 : 0.65,
+            weight: 1,
+          }}
+        >
+          <Popup className="tetryon-popup">
+            <div className="popup-content">
+              <div><strong>ID:</strong> {node.id}</div>
+              <div><strong>SIG:</strong> {node.harmonicSignature}</div>
+              <div><strong>VAL:</strong> {node.originalValue.toFixed(2)}</div>
+            </div>
+          </Popup>
+        </CircleMarker>
+      ))}
+    </MapContainer>
+  );
+};
+
+const CelestialOverlay = ({ center }) => {
+  const radius = 1.1;
+  const positions = Array.from({ length: 6 }, (_, index) => {
+    const angleRadians = (Math.PI / 3) * index;
+    return [
+      center[0] + radius * Math.cos(angleRadians),
+      center[1] + radius * Math.sin(angleRadians) * 1.25,
+    ];
+  });
+
+  return (
+    <>
+      <Polygon
+        positions={positions}
+        pathOptions={{ color: '#8897ff', weight: 1, dashArray: '4 8', fillOpacity: 0.05, interactive: false }}
+      />
+      <Polygon
+        positions={[positions[0], positions[2], positions[4]]}
+        pathOptions={{ color: '#8897ff', weight: 1, fill: false, interactive: false }}
+      />
+      <Polygon
+        positions={[positions[1], positions[3], positions[5]]}
+        pathOptions={{ color: '#8897ff', weight: 1, fill: false, interactive: false }}
+      />
+    </>
+  );
 };
 
 const ForceLine = ({ connection }) => {
-    const pos = [
-        [connection.source.displayCoords.lat, connection.source.displayCoords.lng],
-        [connection.target.displayCoords.lat, connection.target.displayCoords.lng]
-    ];
+  const positions = [
+    [connection.source.displayCoords.lat, connection.source.displayCoords.lng],
+    [connection.target.displayCoords.lat, connection.target.displayCoords.lng],
+  ];
 
-    const opacity = Math.min(connection.force * 10, 1);
-    const color = connection.isStressed ? '#ff3333' : '#0077ff';
-
-    return (
-        <Polyline
-            positions={pos}
-            pathOptions={{ color, weight: 1, opacity, dashArray: connection.isStressed ? '5,5' : null }}
-        />
-    );
+  return (
+    <Polyline
+      positions={positions}
+      pathOptions={{
+        color: connection.isStressed ? '#ff6b6b' : '#4b8dff',
+        weight: connection.isStressed ? 2 : 1,
+        opacity: Math.min(connection.force * 8, 0.85),
+        dashArray: connection.isStressed ? '6 6' : undefined,
+      }}
+    />
+  );
 };
 
 export default TetryonMap;
